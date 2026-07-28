@@ -11,7 +11,11 @@ export const env = {
   corsOrigin: process.env.CORS_ORIGIN || '*',
   defaultGreenhouseCode: process.env.DEFAULT_GREENHOUSE_CODE || '0000',
   cameraStreamUrl: process.env.CAMERA_STREAM_URL || 'http://127.0.0.1:8080/stream',
-  hardwareMode: process.env.HARDWARE_MODE || 'mock'
+  hardwareMode: process.env.HARDWARE_MODE || 'mock',
+  authRateLimit: Number(process.env.AUTH_RATE_LIMIT || 10),
+  pairingRateLimit: Number(process.env.PAIRING_RATE_LIMIT || 10),
+  rateLimitWindowMs: Number(process.env.RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000),
+  greenhouseOfflineAfterMs: Number(process.env.GREENHOUSE_OFFLINE_AFTER_MS || 2 * 60 * 1000)
 };
 
 if (!env.jwtSecret) {

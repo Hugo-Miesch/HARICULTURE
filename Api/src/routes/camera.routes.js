@@ -28,21 +28,35 @@ router.get(
     const greenhouse = await ownedGreenhouse(req.user.id, req.params.greenhouseId);
     if (!greenhouse.camera.enabled) throw new AppError(503, 'Caméra désactivée');
 
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
     let upstream;
     try {
-      upstream = await fetch(env.cameraStreamUrl, { signal: AbortSignal.timeout(5000) });
+      upstream = await fetch(env.cameraStreamUrl, { signal: controller.signal });
     } catch {
+      clearTimeout(timeout);
       throw new AppError(502, 'Flux caméra indisponible');
     }
-    if (!upstream.ok || !upstream.body) throw new AppError(502, 'Flux caméra indisponible');
+    clearTimeout(timeout);
+    if (!upstream.ok || !upstream.body) {
+      controller.abort();
+      throw new AppError(502, 'Flux caméra indisponible');
+    }
 
+    const stream = Readable.fromWeb(upstream.body);
+    const closeUpstream = () => {
+      controller.abort();
+      stream.destroy();
+    };
+    req.once('aborted', closeUpstream);
+    res.once('close', closeUpstream);
     res.status(200);
     res.setHeader(
       'Content-Type',
       upstream.headers.get('content-type') || 'multipart/x-mixed-replace; boundary=frame'
     );
     res.setHeader('Cache-Control', 'no-store');
-    Readable.fromWeb(upstream.body).pipe(res);
+    stream.pipe(res);
   })
 );
 

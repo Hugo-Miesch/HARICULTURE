@@ -37,6 +37,12 @@ curl http://localhost:3000/api/health
 Pour la production, changez impérativement `JWT_SECRET` et le code d'association dans
 `.env`. Le code `0000` est uniquement destiné au développement.
 
+Le healthcheck exécute un vrai `ping` MongoDB et renvoie `503` si la base est
+inaccessible ou refuse l'authentification. Les variables `AUTH_RATE_LIMIT`,
+`PAIRING_RATE_LIMIT` et `RATE_LIMIT_WINDOW_MS` protègent les routes sensibles.
+`GREENHOUSE_OFFLINE_AFTER_MS` définit le délai après lequel une serre sans heartbeat
+est affichée hors ligne.
+
 ## Routes principales
 
 Toutes les routes de serre nécessitent l'en-tête
@@ -50,6 +56,7 @@ Toutes les routes de serre nécessitent l'en-tête
 | POST | `/api/greenhouses/pair` | Associer la serre avec `{ "code": "0000" }` |
 | GET | `/api/greenhouses` | Lister les serres |
 | GET | `/api/greenhouses/:id` | État d'une serre |
+| POST | `/api/greenhouses/:id/heartbeat` | Signaler que la serre est en ligne |
 | PATCH | `/api/greenhouses/:id/actuators/:actuator` | Piloter `light`, `irrigation` ou `ventilation` |
 | POST | `/api/greenhouses/:id/sensors` | Enregistrer un relevé |
 | POST | `/api/greenhouses/:id/sensors/collect` | Lire l'adaptateur matériel |

@@ -6,8 +6,15 @@ import { requireAuth } from '../middleware/auth.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { AppError } from '../utils/AppError.js';
 import { signToken } from '../utils/jwt.js';
+import { createRateLimit } from '../middleware/rateLimit.js';
+import { env } from '../config/env.js';
 
 const router = Router();
+const authRateLimit = createRateLimit({
+  windowMs: env.rateLimitWindowMs,
+  max: env.authRateLimit,
+  key: (req) => `auth:${req.ip}`
+});
 const credentials = z.object({
   body: z.object({
     email: z.email().transform((value) => value.toLowerCase()),
@@ -19,6 +26,7 @@ const credentials = z.object({
 
 router.post(
   '/register',
+  authRateLimit,
   validate(
     credentials.extend({
       body: credentials.shape.body.extend({ name: z.string().trim().min(2).max(80) })
@@ -35,6 +43,7 @@ router.post(
 
 router.post(
   '/login',
+  authRateLimit,
   validate(credentials),
   asyncHandler(async (req, res) => {
     const { email, password } = req.validated.body;

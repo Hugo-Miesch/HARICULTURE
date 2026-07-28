@@ -16,6 +16,10 @@ export function errorHandler(error, _req, res, _next) {
     status = 409;
     message = 'Cette valeur existe déjà';
   }
+  if (status >= 500 && !error.status) {
+    if (process.env.NODE_ENV !== 'test') console.error(error);
+    message = 'Erreur interne du serveur';
+  }
 
   res.status(status).json({
     error: { message, ...(error.details && { details: error.details }) }
