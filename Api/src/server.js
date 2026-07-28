@@ -1,0 +1,29 @@
+import { createApp } from './app.js';
+import { connectDatabase, disconnectDatabase } from './config/database.js';
+import { env } from './config/env.js';
+import { startRoutineScheduler, stopRoutineScheduler } from './services/routineScheduler.js';
+
+let server;
+
+async function start() {
+  await connectDatabase();
+  server = createApp().listen(env.port, () => {
+    console.log(`API Hariculture disponible sur http://localhost:${env.port}`);
+  });
+  startRoutineScheduler();
+}
+
+async function shutdown() {
+  stopRoutineScheduler();
+  if (server) await new Promise((resolve) => server.close(resolve));
+  await disconnectDatabase();
+  process.exit(0);
+}
+
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);
+
+start().catch((error) => {
+  console.error('Impossible de démarrer API Hariculture:', error);
+  process.exit(1);
+});
