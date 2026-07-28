@@ -1,0 +1,13 @@
+.DS_Store
+*.iml
+.idea/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+coverage/
+android/.gradle/
+ios/Pods/
+ios/.symlinks/
+macos/Pods/
