@@ -139,6 +139,14 @@ class ApiClient {
         : SensorReading.fromJson(reading as Map<String, dynamic>);
   }
 
+  Future<SensorReading> collectReading(String greenhouseId) async {
+    final data = await _request(
+      'POST',
+      '/greenhouses/$greenhouseId/sensors/collect',
+    );
+    return SensorReading.fromJson(data['reading'] as Map<String, dynamic>);
+  }
+
   Future<List<SensorReading>> readings(String greenhouseId) async {
     final data = await _request(
       'GET',

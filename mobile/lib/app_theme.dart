@@ -25,11 +25,11 @@ class AppColors extends ThemeExtension<AppColors> {
   );
 
   static const light = AppColors(
-    background: Color(0xfff3f4ef),
-    surface: Color(0xffffffff),
-    surfaceSoft: Color(0xffe9eee9),
-    navigation: Color(0xfffafbf7),
-    border: Color(0xffd8e0d9),
+    background: Color(0xffedf4ef),
+    surface: Color(0xfff8fbf8),
+    surfaceSoft: Color(0xffe2ece5),
+    navigation: Color(0xfff3f8f4),
+    border: Color(0xffceddd2),
     foreground: Color(0xff17211d),
     muted: Color(0xff6d7771),
     accent: Color(0xff2f8067),
@@ -84,4 +84,77 @@ class AppColors extends ThemeExtension<AppColors> {
 
 extension AppColorsContext on BuildContext {
   AppColors get appColors => Theme.of(this).extension<AppColors>()!;
+}
+
+Color appOnAccent(AppColors colors) =>
+    ThemeData.estimateBrightnessForColor(colors.accent) == Brightness.dark
+        ? const Color(0xfff7fbf9)
+        : const Color(0xff10201b);
+
+ButtonStyle appPrimaryButtonStyle(
+  BuildContext context, {
+  double height = 54,
+  double radius = 18,
+}) {
+  final colors = context.appColors;
+  final foreground = appOnAccent(colors);
+  return FilledButton.styleFrom(
+    minimumSize: Size.fromHeight(height),
+    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+    backgroundColor: colors.accent,
+    foregroundColor: foreground,
+    disabledBackgroundColor: Color.alphaBlend(
+      colors.accent.withValues(alpha: 0.08),
+      colors.surfaceSoft,
+    ),
+    disabledForegroundColor: colors.muted.withValues(alpha: 0.78),
+    overlayColor: foreground.withValues(alpha: 0.1),
+    elevation: 0,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(radius),
+    ),
+  );
+}
+
+ButtonStyle appTonalButtonStyle(
+  BuildContext context, {
+  double height = 48,
+  double radius = 16,
+}) {
+  final colors = context.appColors;
+  return TextButton.styleFrom(
+    minimumSize: Size.fromHeight(height),
+    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
+    foregroundColor: colors.accent,
+    backgroundColor: colors.accent.withValues(alpha: 0.09),
+    disabledForegroundColor: colors.muted.withValues(alpha: 0.78),
+    disabledBackgroundColor: colors.surfaceSoft.withValues(alpha: 0.72),
+    overlayColor: colors.accent.withValues(alpha: 0.1),
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(radius),
+    ),
+  );
+}
+
+ButtonStyle appOutlineButtonStyle(
+  BuildContext context, {
+  double height = 56,
+  double radius = 18,
+}) {
+  final colors = context.appColors;
+  return OutlinedButton.styleFrom(
+    minimumSize: Size.fromHeight(height),
+    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+    foregroundColor: colors.accent,
+    backgroundColor: colors.accent.withValues(alpha: 0.07),
+    disabledForegroundColor: colors.muted.withValues(alpha: 0.78),
+    disabledBackgroundColor: colors.surfaceSoft.withValues(alpha: 0.72),
+    overlayColor: colors.accent.withValues(alpha: 0.1),
+    side: BorderSide(
+      color: colors.accent.withValues(alpha: 0.42),
+    ),
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(radius),
+    ),
+  );
 }

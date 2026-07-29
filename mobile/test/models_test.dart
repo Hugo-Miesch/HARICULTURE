@@ -94,6 +94,7 @@ void main() {
 
     expect(greenhouses, hasLength(2));
     expect(greenhouse.online, isTrue);
+    expect(await api.collectReading(greenhouse.id), isNotNull);
     expect(await api.latestReading(greenhouse.id), isNotNull);
     expect(await api.routines(greenhouse.id), hasLength(3));
 

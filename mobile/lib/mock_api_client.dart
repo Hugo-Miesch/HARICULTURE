@@ -173,6 +173,12 @@ class MockApiClient extends ApiClient {
   }
 
   @override
+  Future<SensorReading> collectReading(String greenhouseId) async {
+    await _wait();
+    return _readings(greenhouseId).first;
+  }
+
+  @override
   Future<List<SensorReading>> readings(String greenhouseId) async {
     await _wait();
     return _readings(greenhouseId);

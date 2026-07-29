@@ -125,6 +125,19 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<void> _collectAndRefresh() async {
+    String? collectionError;
+    try {
+      await widget.api.collectReading(greenhouse.id);
+    } catch (exception) {
+      collectionError = exception.toString();
+    }
+
+    await _refresh();
+    if (!mounted || collectionError == null) return;
+    setState(() => error = 'Lecture impossible : $collectionError');
+  }
+
   Future<void> _toggleActuator(String name, bool state) async {
     try {
       final actuator = await widget.api.setActuator(
@@ -246,8 +259,14 @@ class _HomeScreenState extends State<HomeScreen> {
         title: Text(titles[page]),
         actions: [
           IconButton(
-            onPressed: _refresh,
+            onPressed: _collectAndRefresh,
             tooltip: 'Actualiser',
+            style: IconButton.styleFrom(
+              foregroundColor: colors.accent,
+              backgroundColor: colors.accent.withValues(alpha: 0.1),
+              disabledForegroundColor: colors.muted,
+              disabledBackgroundColor: colors.surfaceSoft,
+            ),
             icon: const Icon(Icons.refresh),
           ),
           PopupMenuButton<String>(
@@ -266,7 +285,9 @@ class _HomeScreenState extends State<HomeScreen> {
       body: loading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
-              onRefresh: _refresh,
+              color: colors.accent,
+              backgroundColor: colors.surface,
+              onRefresh: _collectAndRefresh,
               child: IndexedStack(
                 index: page,
                 children: [
@@ -325,6 +346,8 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       floatingActionButton: page == 2
           ? FloatingActionButton.extended(
+              backgroundColor: colors.accent,
+              foregroundColor: appOnAccent(colors),
               onPressed: () async {
                 final created = await showModalBottomSheet<bool>(
                   context: context,
@@ -1625,13 +1648,18 @@ class ReadingsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.appColors;
     if (readings.isEmpty) {
       return ListView(
-        children: const [
-          SizedBox(height: 150),
-          Icon(Icons.query_stats, size: 64),
-          SizedBox(height: 12),
-          Center(child: Text('Aucune mesure disponible')),
+        children: [
+          const SizedBox(height: 150),
+          Icon(
+            Icons.query_stats,
+            size: 64,
+            color: colors.accent,
+          ),
+          const SizedBox(height: 12),
+          const Center(child: Text('Aucune mesure disponible')),
         ],
       );
     }
@@ -1648,7 +1676,10 @@ class ReadingsPage extends StatelessWidget {
                 'à ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
         return Card(
           child: ListTile(
-            leading: const CircleAvatar(child: Icon(Icons.thermostat)),
+            leading: CircleAvatar(
+              backgroundColor: colors.accent.withValues(alpha: 0.13),
+              child: Icon(Icons.thermostat, color: colors.accent),
+            ),
             title: Text(
               '${item.temperature?.toStringAsFixed(1) ?? '—'} °C  ·  '
               '${item.airHumidity?.toStringAsFixed(0) ?? '—'} %',
@@ -1683,6 +1714,7 @@ class RoutinesPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.appColors;
     if (routines.isEmpty) {
       return ListView(
         children: const [
@@ -1740,7 +1772,11 @@ class RoutinesPage extends StatelessWidget {
           child: Card(
             child: SwitchListTile(
               secondary: CircleAvatar(
-                child: Icon(_actuatorIcon(routine.actuator)),
+                backgroundColor: colors.accent.withValues(alpha: 0.13),
+                child: Icon(
+                  _actuatorIcon(routine.actuator),
+                  color: colors.accent,
+                ),
               ),
               title: Text(
                 routine.name,
@@ -1753,6 +1789,12 @@ class RoutinesPage extends StatelessWidget {
               ),
               isThreeLine: true,
               value: routine.enabled,
+              activeThumbColor: colors.accent,
+              activeTrackColor: colors.accent.withValues(alpha: 0.34),
+              inactiveThumbColor: colors.muted,
+              inactiveTrackColor: colors.surfaceSoft,
+              trackOutlineColor:
+                  const WidgetStatePropertyAll(Colors.transparent),
               onChanged: (value) async {
                 try {
                   await api.toggleRoutine(
@@ -1851,6 +1893,8 @@ class _RoutineFormState extends State<RoutineForm> {
   @override
   Widget build(BuildContext context) {
     const dayNames = ['D', 'L', 'M', 'M', 'J', 'V', 'S'];
+    final colors = context.appColors;
+    final primaryForeground = appOnAccent(colors);
     return SafeArea(
       child: Padding(
         padding: EdgeInsets.fromLTRB(
@@ -1900,13 +1944,15 @@ class _RoutineFormState extends State<RoutineForm> {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
                 ),
-                tileColor:
-                    Theme.of(context).colorScheme.surfaceContainerHighest,
-                leading: const Icon(Icons.schedule),
+                tileColor: colors.surfaceSoft,
+                leading: Icon(Icons.schedule, color: colors.accent),
                 title: const Text('Heure de début'),
                 trailing: Text(
                   time.format(context),
-                  style: const TextStyle(fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                    color: colors.accent,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 onTap: () async {
                   final selected = await showTimePicker(
@@ -1926,13 +1972,29 @@ class _RoutineFormState extends State<RoutineForm> {
                 spacing: 7,
                 children: List.generate(
                   7,
-                  (index) => FilterChip(
-                    label: Text(dayNames[index]),
-                    selected: days.contains(index),
-                    onSelected: (selected) => setState(() {
-                      selected ? days.add(index) : days.remove(index);
-                    }),
-                  ),
+                  (index) {
+                    final selected = days.contains(index);
+                    return FilterChip(
+                      label: Text(
+                        dayNames[index],
+                        style: TextStyle(
+                          color:
+                              selected ? primaryForeground : colors.foreground,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      selected: selected,
+                      selectedColor: colors.accent,
+                      backgroundColor: colors.surfaceSoft,
+                      checkmarkColor: primaryForeground,
+                      side: BorderSide(
+                        color: selected ? colors.accent : colors.border,
+                      ),
+                      onSelected: (value) => setState(() {
+                        value ? days.add(index) : days.remove(index);
+                      }),
+                    );
+                  },
                 ),
               ),
               const SizedBox(height: 16),
@@ -1954,10 +2016,16 @@ class _RoutineFormState extends State<RoutineForm> {
               const SizedBox(height: 20),
               FilledButton(
                 onPressed: loading ? null : _save,
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size.fromHeight(52),
-                ),
-                child: Text(loading ? 'Création…' : 'Créer la routine'),
+                style: appPrimaryButtonStyle(context),
+                child: loading
+                    ? SizedBox.square(
+                        dimension: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: primaryForeground,
+                        ),
+                      )
+                    : const Text('Créer la routine'),
               ),
             ],
           ),

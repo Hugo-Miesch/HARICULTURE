@@ -111,6 +111,22 @@ class _GreenhouseListScreenState extends State<GreenhouseListScreen> {
     });
   }
 
+  Future<void> _collectAndLoadReadings() async {
+    try {
+      await Future.wait(
+        greenhouses.map(
+          (greenhouse) => widget.api.collectReading(greenhouse.id),
+        ),
+      );
+      await _loadReadings();
+    } catch (exception) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Lecture impossible : $exception')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = context.appColors;
@@ -150,7 +166,7 @@ class _GreenhouseListScreenState extends State<GreenhouseListScreen> {
   Widget _greenhousesPage({required VoidCallback onOpenMenu}) => SafeArea(
         bottom: false,
         child: RefreshIndicator(
-          onRefresh: _loadReadings,
+          onRefresh: _collectAndLoadReadings,
           color: context.appColors.accent,
           backgroundColor: context.appColors.surface,
           child: CustomScrollView(
@@ -214,13 +230,20 @@ class _GreenhouseListScreenState extends State<GreenhouseListScreen> {
                 sliver: SliverToBoxAdapter(
                   child: SizedBox(
                     height: 68,
-                    child: FButton(
-                      variant: FButtonVariant.outline,
-                      prefix: const Icon(FLucideIcons.plus, size: 22),
-                      onPress: () => _showAddGreenhouse(context),
-                      child: const Text(
+                    child: OutlinedButton.icon(
+                      style: appOutlineButtonStyle(
+                        context,
+                        height: 68,
+                        radius: 22,
+                      ),
+                      icon: const Icon(FLucideIcons.plus, size: 22),
+                      onPressed: () => _showAddGreenhouse(context),
+                      label: const Text(
                         'Ajouter une serre',
-                        style: TextStyle(fontSize: 16),
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                   ),
@@ -542,21 +565,13 @@ class _PairGreenhouseSheetState extends State<_PairGreenhouseSheet> {
               child: FilledButton(
                 onPressed:
                     loading || codeController.text.length != 4 ? null : _pair,
-                style: FilledButton.styleFrom(
-                  backgroundColor: colors.accent,
-                  foregroundColor: colors.background,
-                  disabledBackgroundColor: colors.surfaceSoft,
-                  disabledForegroundColor: colors.muted,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                ),
+                style: appPrimaryButtonStyle(context, height: 56),
                 child: loading
                     ? SizedBox.square(
                         dimension: 22,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          color: colors.background,
+                          color: appOnAccent(colors),
                         ),
                       )
                     : const Text(
@@ -1048,10 +1063,15 @@ class _AccountPage extends StatelessWidget {
                     ],
                   ),
                 ),
-                FSwitch(
+                Switch(
                   value: darkMode,
-                  onChange: onThemeChanged,
-                  semanticsLabel: 'Activer le mode sombre',
+                  activeThumbColor: colors.accent,
+                  activeTrackColor: colors.accent.withValues(alpha: 0.34),
+                  inactiveThumbColor: colors.muted,
+                  inactiveTrackColor: colors.surfaceSoft,
+                  trackOutlineColor:
+                      const WidgetStatePropertyAll(Colors.transparent),
+                  onChanged: onThemeChanged,
                 ),
               ],
             ),

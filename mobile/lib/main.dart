@@ -75,37 +75,47 @@ class _HaricultureAppState extends State<HaricultureApp> {
     final foruiTheme =
         darkMode ? FTheme.neutral.dark.touch : FTheme.neutral.light.touch;
     final appColors = darkMode ? AppColors.dark : AppColors.light;
+    final materialTheme = foruiTheme.toApproximateMaterialTheme();
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Hariculture',
       localizationsDelegates: FLocalizations.localizationsDelegates,
       supportedLocales: FLocalizations.supportedLocales,
-      theme: foruiTheme.toApproximateMaterialTheme().copyWith(
-            scaffoldBackgroundColor: appColors.background,
-            extensions: [appColors],
-            appBarTheme: AppBarTheme(
-              backgroundColor: appColors.background,
-              foregroundColor: appColors.foreground,
-              surfaceTintColor: Colors.transparent,
-              elevation: 0,
-            ),
-            cardTheme: CardThemeData(
-              color: appColors.surface,
-              elevation: 0,
-              margin: EdgeInsets.zero,
-              shape: RoundedRectangleBorder(
-                borderRadius: const BorderRadius.all(Radius.circular(22)),
-                side: BorderSide(color: appColors.border),
-              ),
-            ),
-            inputDecorationTheme: const InputDecorationTheme(
-              filled: true,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.all(Radius.circular(16)),
-                borderSide: BorderSide.none,
-              ),
-            ),
+      theme: materialTheme.copyWith(
+        scaffoldBackgroundColor: appColors.background,
+        extensions: [appColors],
+        colorScheme: materialTheme.colorScheme.copyWith(
+          primary: appColors.accent,
+          onPrimary: appOnAccent(appColors),
+          secondary: appColors.accent,
+          onSecondary: appOnAccent(appColors),
+          surface: appColors.surface,
+          onSurface: appColors.foreground,
+          outline: appColors.border,
+        ),
+        appBarTheme: AppBarTheme(
+          backgroundColor: appColors.background,
+          foregroundColor: appColors.foreground,
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+        ),
+        cardTheme: CardThemeData(
+          color: appColors.surface,
+          elevation: 0,
+          margin: EdgeInsets.zero,
+          shape: RoundedRectangleBorder(
+            borderRadius: const BorderRadius.all(Radius.circular(22)),
+            side: BorderSide(color: appColors.border),
           ),
+        ),
+        inputDecorationTheme: const InputDecorationTheme(
+          filled: true,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.all(Radius.circular(16)),
+            borderSide: BorderSide.none,
+          ),
+        ),
+      ),
       builder: (context, child) => FTheme(
         data: foruiTheme,
         platform: FPlatformVariant.iOS,
@@ -180,128 +190,134 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-        body: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 440),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Container(
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+    final primaryForeground = appOnAccent(colors);
+    return Scaffold(
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 440),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Container(
                       width: 76,
                       height: 76,
                       decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.primary,
+                        color: colors.accent,
                         borderRadius: BorderRadius.circular(24),
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.eco_rounded,
-                        color: Colors.white,
+                        color: primaryForeground,
                         size: 42,
                       ),
                     ),
-                    const SizedBox(height: 28),
-                    Text(
-                      'Cultivez plus\nsereinement.',
-                      style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                            fontWeight: FontWeight.w800,
-                            height: 1.05,
-                          ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      widget.api is MockApiClient
-                          ? 'Une démo complète, prête à explorer sans matériel.'
-                          : 'Votre serre, ses mesures et ses routines dans votre poche.',
-                      style: Theme.of(context).textTheme.bodyLarge,
-                    ),
-                    const SizedBox(height: 34),
-                    if (register) ...[
-                      TextField(
-                        controller: name,
-                        textInputAction: TextInputAction.next,
-                        decoration: const InputDecoration(
-                          labelText: 'Prénom et nom',
-                          prefixIcon: Icon(Icons.person_outline),
+                  ),
+                  const SizedBox(height: 28),
+                  Text(
+                    'Cultivez plus\nsereinement.',
+                    style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          height: 1.05,
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    widget.api is MockApiClient
+                        ? 'Une démo complète, prête à explorer sans matériel.'
+                        : 'Votre serre, ses mesures et ses routines dans votre poche.',
+                    style: Theme.of(context).textTheme.bodyLarge,
+                  ),
+                  const SizedBox(height: 34),
+                  if (register) ...[
                     TextField(
-                      controller: email,
-                      keyboardType: TextInputType.emailAddress,
+                      controller: name,
                       textInputAction: TextInputAction.next,
                       decoration: const InputDecoration(
-                        labelText: 'Adresse email',
-                        prefixIcon: Icon(Icons.mail_outline),
+                        labelText: 'Prénom et nom',
+                        prefixIcon: Icon(Icons.person_outline),
                       ),
                     ),
                     const SizedBox(height: 12),
-                    TextField(
-                      controller: password,
-                      obscureText: true,
-                      onSubmitted: (_) => _submit(),
-                      decoration: const InputDecoration(
-                        labelText: 'Mot de passe',
-                        prefixIcon: Icon(Icons.lock_outline),
-                      ),
+                  ],
+                  TextField(
+                    controller: email,
+                    keyboardType: TextInputType.emailAddress,
+                    textInputAction: TextInputAction.next,
+                    decoration: const InputDecoration(
+                      labelText: 'Adresse email',
+                      prefixIcon: Icon(Icons.mail_outline),
                     ),
-                    if (error != null) ...[
-                      const SizedBox(height: 12),
-                      Text(
-                        error!,
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 20),
-                    FilledButton(
-                      onPressed: loading ? null : _submit,
-                      style: FilledButton.styleFrom(
-                        minimumSize: const Size.fromHeight(54),
-                      ),
-                      child: loading
-                          ? const SizedBox.square(
-                              dimension: 22,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : Text(
-                              register ? 'Créer mon compte' : 'Se connecter'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: password,
+                    obscureText: true,
+                    onSubmitted: (_) => _submit(),
+                    decoration: const InputDecoration(
+                      labelText: 'Mot de passe',
+                      prefixIcon: Icon(Icons.lock_outline),
                     ),
-                    if (widget.api is MockApiClient)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: Text(
-                          'Mode démo local · aucune donnée n’est envoyée',
-                          textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ),
-                    TextButton(
-                      onPressed: () => setState(() {
-                        register = !register;
-                        error = null;
-                      }),
-                      child: Text(
-                        register
-                            ? 'J’ai déjà un compte'
-                            : 'Créer un nouveau compte',
+                  ),
+                  if (error != null) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      error!,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
                       ),
                     ),
                   ],
-                ),
+                  const SizedBox(height: 20),
+                  FilledButton(
+                    onPressed: loading ? null : _submit,
+                    style: appPrimaryButtonStyle(context),
+                    child: loading
+                        ? SizedBox.square(
+                            dimension: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: primaryForeground,
+                            ),
+                          )
+                        : Text(register ? 'Créer mon compte' : 'Se connecter'),
+                  ),
+                  if (widget.api is MockApiClient)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        'Mode démo local · aucune donnée n’est envoyée',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ),
+                  const SizedBox(height: 10),
+                  TextButton(
+                    style: appTonalButtonStyle(context),
+                    onPressed: () => setState(() {
+                      register = !register;
+                      error = null;
+                    }),
+                    child: Text(
+                      register
+                          ? 'J’ai déjà un compte'
+                          : 'Créer un nouveau compte',
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
         ),
-      );
+      ),
+    );
+  }
 }
 
 class GreenhouseLoader extends StatefulWidget {
@@ -421,71 +437,98 @@ class _PairScreenState extends State<PairScreen> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(
-          actions: [
-            IconButton(
-              onPressed: widget.onLogout,
-              tooltip: 'Se déconnecter',
-              icon: const Icon(Icons.logout),
-            ),
-          ],
-        ),
-        body: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 440),
-              child: Column(
-                children: [
-                  const Icon(Icons.sensors, size: 88),
-                  const SizedBox(height: 22),
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+    final primaryForeground = appOnAccent(colors);
+    return Scaffold(
+      appBar: AppBar(
+        actions: [
+          IconButton(
+            onPressed: widget.onLogout,
+            tooltip: 'Se déconnecter',
+            icon: const Icon(Icons.logout),
+          ),
+        ],
+      ),
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 440),
+            child: Column(
+              children: [
+                Container(
+                  width: 88,
+                  height: 88,
+                  decoration: BoxDecoration(
+                    color: colors.accent.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(28),
+                  ),
+                  child: Icon(
+                    Icons.sensors,
+                    size: 46,
+                    color: colors.accent,
+                  ),
+                ),
+                const SizedBox(height: 22),
+                Text(
+                  'Associer votre serre',
+                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'Saisissez le code à 4 caractères affiché sur votre boîtier Hariculture.',
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 28),
+                TextField(
+                  controller: code,
+                  maxLength: 4,
+                  keyboardType: TextInputType.text,
+                  textCapitalization: TextCapitalization.characters,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  inputFormatters: serialNumberInputFormatters,
+                  onChanged: (_) => setState(() => error = null),
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        letterSpacing: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                  decoration: const InputDecoration(labelText: 'Code'),
+                ),
+                if (error != null)
                   Text(
-                    'Associer votre serre',
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                    error!,
+                    style:
+                        TextStyle(color: Theme.of(context).colorScheme.error),
                   ),
-                  const SizedBox(height: 10),
-                  const Text(
-                    'Saisissez le code à 4 caractères affiché sur votre boîtier Hariculture.',
-                    textAlign: TextAlign.center,
+                const SizedBox(height: 14),
+                FilledButton.icon(
+                  onPressed: loading || code.text.length != 4 ? null : _pair,
+                  style: appPrimaryButtonStyle(context),
+                  icon: loading
+                      ? SizedBox.square(
+                          dimension: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: primaryForeground,
+                          ),
+                        )
+                      : const Icon(Icons.link),
+                  label: Text(
+                    loading ? 'Association…' : 'Associer la serre',
                   ),
-                  const SizedBox(height: 28),
-                  TextField(
-                    controller: code,
-                    maxLength: 4,
-                    keyboardType: TextInputType.text,
-                    textCapitalization: TextCapitalization.characters,
-                    autocorrect: false,
-                    enableSuggestions: false,
-                    inputFormatters: serialNumberInputFormatters,
-                    onChanged: (_) => setState(() => error = null),
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          letterSpacing: 12,
-                          fontWeight: FontWeight.bold,
-                        ),
-                    decoration: const InputDecoration(labelText: 'Code'),
-                  ),
-                  if (error != null)
-                    Text(
-                      error!,
-                      style:
-                          TextStyle(color: Theme.of(context).colorScheme.error),
-                    ),
-                  const SizedBox(height: 14),
-                  FilledButton.icon(
-                    onPressed: loading || code.text.length != 4 ? null : _pair,
-                    icon: const Icon(Icons.link),
-                    label: const Text('Associer la serre'),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ),
-      );
+      ),
+    );
+  }
 }
 
 class ErrorScreen extends StatelessWidget {
