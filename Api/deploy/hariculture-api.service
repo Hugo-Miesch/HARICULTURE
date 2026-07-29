@@ -1,0 +1,20 @@
+[Unit]
+Description=API Hariculture pour serre connectée
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=gogo
+Group=gogo
+SupplementaryGroups=gpio i2c video render
+WorkingDirectory=/home/gogo/Desktop/API-HARICULTURE/HARICULTURE/Api
+EnvironmentFile=/home/gogo/Desktop/API-HARICULTURE/HARICULTURE/Api/.env
+ExecStart=/usr/bin/node src/server.js
+Restart=always
+RestartSec=3
+TimeoutStopSec=10
+KillSignal=SIGTERM
+
+[Install]
+WantedBy=multi-user.target

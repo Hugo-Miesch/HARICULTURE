@@ -2,6 +2,8 @@ import { createApp } from './app.js';
 import { connectDatabase, disconnectDatabase } from './config/database.js';
 import { env } from './config/env.js';
 import { startRoutineScheduler, stopRoutineScheduler } from './services/routineScheduler.js';
+import { camera } from './services/camera.js';
+import { hardware } from './services/hardware.js';
 
 let server;
 
@@ -15,6 +17,8 @@ async function start() {
 
 async function shutdown() {
   stopRoutineScheduler();
+  camera.stop();
+  hardware.close();
   if (server) await new Promise((resolve) => server.close(resolve));
   await disconnectDatabase();
   process.exit(0);

@@ -6,6 +6,7 @@ import jwt from 'jsonwebtoken';
 
 process.env.NODE_ENV = 'test';
 process.env.JWT_SECRET = 'test-secret-at-least-32-characters-long';
+process.env.HARDWARE_MODE = 'mock';
 process.env.MONGOMS_DISTRO = 'ubuntu-22.04';
 
 let mongo;
