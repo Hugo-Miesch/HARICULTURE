@@ -3,6 +3,9 @@ import request from 'supertest';
 import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import jwt from 'jsonwebtoken';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import os from 'node:os';
 
 process.env.NODE_ENV = 'test';
 process.env.JWT_SECRET = 'test-secret-at-least-32-characters-long';
@@ -11,11 +14,14 @@ process.env.MONGOMS_DISTRO = 'ubuntu-22.04';
 
 let mongo;
 let app;
+let galleryDirectory;
 let token;
 let greenhouseId;
 let resetRateLimits;
 
 beforeAll(async () => {
+  galleryDirectory = await mkdtemp(path.join(os.tmpdir(), 'hariculture-gallery-'));
+  process.env.GALLERY_DIRECTORY = galleryDirectory;
   mongo = await MongoMemoryServer.create({ binary: { version: '7.0.14' } });
   const { connectDatabase } = await import('../src/config/database.js');
   const { createApp } = await import('../src/app.js');
@@ -29,6 +35,7 @@ afterEach(async () => {
   await mongoose.connection.db.collection('greenhouses').deleteMany({});
   await mongoose.connection.db.collection('sensorreadings').deleteMany({});
   await mongoose.connection.db.collection('routines').deleteMany({});
+  await mongoose.connection.db.collection('photos').deleteMany({});
   token = undefined;
   greenhouseId = undefined;
   resetRateLimits();
@@ -37,6 +44,7 @@ afterEach(async () => {
 afterAll(async () => {
   await mongoose.disconnect();
   if (mongo) await mongo.stop();
+  if (galleryDirectory) await rm(galleryDirectory, { recursive: true, force: true });
 });
 
 async function registerAndPair() {
@@ -268,5 +276,106 @@ describe('API Hariculture', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({ airHumidity: 140 });
     expect(response.status).toBe(400);
+  });
+
+  it('liste et sert uniquement les photos des serres de l’utilisateur', async () => {
+    await registerAndPair();
+    const ownGreenhouseId = new mongoose.Types.ObjectId(greenhouseId);
+    const foreignGreenhouseId = new mongoose.Types.ObjectId();
+    await mongoose.connection.db.collection('greenhouses').insertOne({
+      _id: foreignGreenhouseId,
+      name: 'Serre étrangère',
+      pairingCode: 'F123',
+      owners: [],
+      camera: { enabled: true },
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+
+    await Promise.all([
+      writeFile(path.join(galleryDirectory, 'own.jpg'), Buffer.from('original')),
+      writeFile(path.join(galleryDirectory, 'own-thumb.jpg'), Buffer.from('thumbnail')),
+      writeFile(path.join(galleryDirectory, 'foreign.jpg'), Buffer.from('foreign')),
+      writeFile(path.join(galleryDirectory, 'foreign-thumb.jpg'), Buffer.from('foreign-thumb'))
+    ]);
+
+    const inserted = await mongoose.connection.db.collection('photos').insertMany([
+      {
+        greenhouse: ownGreenhouseId,
+        fileName: 'own.jpg',
+        thumbnailName: 'own-thumb.jpg',
+        contentType: 'image/jpeg',
+        capturedAt: new Date('2026-07-29T15:30:00.000Z'),
+        caption: 'Capture automatique',
+        width: 1920,
+        height: 1080
+      },
+      {
+        greenhouse: foreignGreenhouseId,
+        fileName: 'foreign.jpg',
+        thumbnailName: 'foreign-thumb.jpg',
+        contentType: 'image/jpeg',
+        capturedAt: new Date()
+      }
+    ]);
+    const ownPhotoId = inserted.insertedIds[0].toString();
+    const foreignPhotoId = inserted.insertedIds[1].toString();
+
+    const list = await request(app)
+      .get('/api/gallery?limit=999')
+      .set('Authorization', `Bearer ${token}`);
+    expect(list.status).toBe(200);
+    expect(list.body.nextCursor).toBeNull();
+    expect(list.body.photos).toEqual([
+      expect.objectContaining({
+        id: ownPhotoId,
+        greenhouseId,
+        greenhouseName: 'Ma serre',
+        imageUrl: `/api/gallery/${ownPhotoId}/file`,
+        thumbnailUrl: `/api/gallery/${ownPhotoId}/thumbnail`,
+        capturedAt: '2026-07-29T15:30:00.000Z'
+      })
+    ]);
+
+    const file = await request(app)
+      .get(`/api/gallery/${ownPhotoId}/file`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(file.status).toBe(200);
+    expect(file.headers['content-type']).toMatch(/^image\/jpeg/);
+    expect(file.headers['cache-control']).toBe('private, max-age=300');
+    expect(file.body).toEqual(Buffer.from('original'));
+
+    const thumbnail = await request(app)
+      .get(`/api/gallery/${ownPhotoId}/thumbnail`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(thumbnail.status).toBe(200);
+    expect(thumbnail.body).toEqual(Buffer.from('thumbnail'));
+
+    const forbidden = await request(app)
+      .get(`/api/gallery/${foreignPhotoId}/file`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(forbidden.status).toBe(403);
+
+    const missing = await request(app)
+      .get(`/api/gallery/${new mongoose.Types.ObjectId()}/file`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(missing.status).toBe(404);
+  });
+
+  it('retourne 500 si le fichier d’une photo est illisible', async () => {
+    await registerAndPair();
+    const result = await mongoose.connection.db.collection('photos').insertOne({
+      greenhouse: new mongoose.Types.ObjectId(greenhouseId),
+      fileName: 'missing.jpg',
+      thumbnailName: 'missing-thumb.jpg',
+      contentType: 'image/jpeg',
+      capturedAt: new Date()
+    });
+
+    const response = await request(app)
+      .get(`/api/gallery/${result.insertedId}/file`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(response.status).toBe(500);
+    expect(response.body.error.message).toBe('Erreur de lecture du stockage');
   });
 });

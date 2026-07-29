@@ -50,7 +50,10 @@ export class RaspberryPiAdapter {
           VENTILATION_PIN: String(env.ventilationPin),
           PUMP_ACTIVE_LOW: String(env.pumpActiveLow),
           LIGHT_ACTIVE_LOW: String(env.lightActiveLow),
-          VENTILATION_ACTIVE_LOW: String(env.ventilationActiveLow)
+          SERVO_CLOSED_PULSE_US: String(env.servoClosedPulseUs),
+          SERVO_OPEN_PULSE_US: String(env.servoOpenPulseUs),
+          SERVO_FREQUENCY: String(env.servoFrequency),
+          SERVO_HOLD_SECONDS: String(env.servoHoldSeconds)
         }
       });
       this.process = child;
@@ -115,7 +118,12 @@ export class RaspberryPiAdapter {
 
   async setActuator(_greenhouseId, actuator, state, value) {
     try {
-      const result = await this.request({ command: 'setActuator', actuator, state });
+      const result = await this.request({
+        command: 'setActuator',
+        actuator,
+        state,
+        value
+      });
       return { ...result, value, appliedAt: new Date(result.appliedAt * 1000) };
     } catch {
       throw new AppError(503, 'Matériel Raspberry indisponible');

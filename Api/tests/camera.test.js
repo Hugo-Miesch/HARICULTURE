@@ -44,4 +44,18 @@ describe('Service caméra Raspberry', () => {
     service.stop();
     expect(child.kill).toHaveBeenCalledWith('SIGTERM');
   });
+
+  it('fournit une copie de la dernière image pour une capture photo', async () => {
+    const child = new EventEmitter();
+    child.stdout = new PassThrough();
+    child.stderr = new PassThrough();
+    child.kill = vi.fn();
+    const service = new RpicamCameraService({ spawnProcess: () => child });
+
+    const captured = service.captureFrame();
+    child.stdout.write(jpeg(0x24));
+
+    expect(await captured).toEqual(jpeg(0x24));
+    service.stop();
+  });
 });

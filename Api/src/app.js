@@ -9,6 +9,7 @@ import sensorRoutes from './routes/sensor.routes.js';
 import routineRoutes from './routes/routine.routes.js';
 import cameraRoutes from './routes/camera.routes.js';
 import healthRoutes from './routes/health.routes.js';
+import galleryRoutes from './routes/gallery.routes.js';
 import { errorHandler, notFound } from './middleware/errorHandler.js';
 
 export function createApp() {
@@ -21,6 +22,7 @@ export function createApp() {
 
   app.use('/api/health', healthRoutes);
   app.use('/api/auth', authRoutes);
+  app.use('/api/gallery', galleryRoutes);
   app.use('/api/greenhouses', greenhouseRoutes);
   app.use('/api/greenhouses/:greenhouseId/sensors', sensorRoutes);
   app.use('/api/greenhouses/:greenhouseId/routines', routineRoutes);

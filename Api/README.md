@@ -12,6 +12,7 @@ Raspberry Pi 5.
   sol et de la luminosité ;
 - routines hebdomadaires d'éclairage, d'arrosage et d'aération ;
 - flux MJPEG authentifié produit directement par `rpicam-vid` ;
+- galerie privée avec miniature et capture automatique chaque jour à minuit ;
 - séparation entre la logique métier et l'accès GPIO ;
 - tests API exécutés sur une vraie instance MongoDB éphémère.
 
@@ -69,6 +70,9 @@ Toutes les routes de serre nécessitent l'en-tête
 | PATCH/DELETE | `/api/greenhouses/:id/routines/:routineId` | Modifier/supprimer une routine |
 | GET | `/api/greenhouses/:id/camera/status` | État et URL de caméra |
 | GET | `/api/greenhouses/:id/camera/stream` | Flux vidéo MJPEG protégé |
+| GET | `/api/gallery?limit=100` | Photos des serres de l'utilisateur |
+| GET | `/api/gallery/:photoId/file` | Fichier JPEG protégé |
+| GET | `/api/gallery/:photoId/thumbnail` | Miniature JPEG protégée |
 
 ### Exemples de corps JSON
 
@@ -125,16 +129,22 @@ actionneurs à l'arrêt au démarrage et à l'arrêt.
 | Capteur de sol numérique 3 broches | GPIO25 |
 | Pompe | GPIO18 |
 | Éclairage | GPIO23 |
-| Fenêtre/aération | GPIO17 |
+| Servomoteur SG90 de fenêtre/aération | GPIO12, signal servo 50 Hz |
 
 Le capteur de sol numérique ne mesure pas un pourcentage : son état sec/humide est
 converti en `0` ou `100` pour rester compatible avec l'application actuelle. Ajustez
 le potentiomètre du module pour définir son seuil.
 
-Les sorties sont configurées actives à l'état haut par défaut. Si un relais s'active
+Les sorties pompe et éclairage sont configurées actives à l'état haut par défaut. Si un relais s'active
 quand son GPIO passe à `0`, réglez la variable correspondante à `true` :
-`PUMP_ACTIVE_LOW`, `LIGHT_ACTIVE_LOW` ou `VENTILATION_ACTIVE_LOW`. Vérifiez cette
+`PUMP_ACTIVE_LOW` ou `LIGHT_ACTIVE_LOW`. Vérifiez cette
 polarité avant de raccorder une pompe ou un moteur.
+
+Le SG90 utilise `SERVO_CLOSED_PULSE_US=500` et `SERVO_OPEN_PULSE_US=2500`.
+La commande d'aération convertit `value` de 0 à 100 entre ces deux positions.
+Les impulsions sont coupées après `SERVO_HOLD_SECONDS` pour limiter les tremblements
+et l'échauffement. Le SG90 doit être alimenté en 5 V par une alimentation externe
+avec masse commune ; seul son fil de signal est relié à GPIO12.
 
 I²C doit être actif :
 
@@ -166,6 +176,28 @@ avoir accès aux périphériques caméra (`video`/`render` selon le système).
 L'application consomme `/api/greenhouses/:id/camera/stream` avec son JWT. Aucun port
 caméra supplémentaire ne doit être exposé sur le réseau.
 
+## Galerie et captures automatiques
+
+Les métadonnées des photos sont conservées dans MongoDB et les fichiers JPEG dans
+`GALLERY_DIRECTORY` (`./data/gallery` par défaut). Ce dossier doit être inclus dans
+les sauvegardes du Raspberry ; il est volontairement ignoré par Git. Les miniatures
+ont une largeur maximale de `GALLERY_THUMBNAIL_WIDTH` (500 px par défaut).
+
+À chaque minuit selon le fuseau horaire du Raspberry, l'API prend automatiquement une
+photo pour chaque serre associée dont la caméra est activée. Elle partage le même
+processus caméra que le direct afin d'éviter deux accès concurrents à la caméra.
+
+Exemple :
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:3000/api/gallery?limit=100"
+```
+
+Les URL `imageUrl` et `thumbnailUrl` retournées sont relatives à l'API et nécessitent
+le même JWT. La liste est bornée entre 1 et 200 éléments et ne renvoie jamais les
+photos d'une serre appartenant à un autre utilisateur.
+
 > Une pompe, un moteur ou des LED puissantes ne doivent jamais être alimentés
 > directement par une broche GPIO. Utilisez relais/MOSFET, alimentation adaptée,
 > diode de roue libre pour les charges inductives et fins de course pour la fenêtre.
@@ -178,7 +210,7 @@ npm test
 
 Les tests téléchargent puis démarrent une instance MongoDB temporaire. Ils vérifient la
 connexion à la base, l'authentification, l'association, les trois actionneurs, les
-capteurs, les validations et le cycle de vie des routines.
+capteurs, les validations, la galerie privée et le cycle de vie des routines.
 
 ## Démarrage automatique sur le Raspberry
 

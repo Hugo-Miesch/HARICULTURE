@@ -142,6 +142,17 @@ export class RpicamCameraService extends EventEmitter {
     };
   }
 
+  async captureFrame() {
+    await this.ensureStarted();
+    const frame = this.latestFrame;
+    if (!frame) throw new Error('La caméra ne produit aucune image');
+    if (this.subscribers.size === 0 && this.process) {
+      clearTimeout(this.stopTimer);
+      this.stopTimer = setTimeout(() => this.stop(), env.cameraIdleStopMs);
+    }
+    return Buffer.from(frame);
+  }
+
   stop() {
     clearTimeout(this.stopTimer);
     this.stopTimer = null;

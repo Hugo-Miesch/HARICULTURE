@@ -2,9 +2,11 @@
 import json
 import os
 import sys
+import threading
 import time
 
 import gpiod
+import lgpio
 from smbus2 import SMBus, i2c_msg
 
 
@@ -37,11 +39,14 @@ class HardwareBridge:
                 env_int("LIGHT_PIN", 23),
                 env_bool("LIGHT_ACTIVE_LOW", False),
             ),
-            "ventilation": (
-                env_int("VENTILATION_PIN", 17),
-                env_bool("VENTILATION_ACTIVE_LOW", False),
-            ),
         }
+        self.servo_pin = env_int("VENTILATION_PIN", 12)
+        self.servo_closed_pulse = env_int("SERVO_CLOSED_PULSE_US", 500)
+        self.servo_open_pulse = env_int("SERVO_OPEN_PULSE_US", 2500)
+        self.servo_frequency = env_int("SERVO_FREQUENCY", 50)
+        self.servo_hold_seconds = float(os.getenv("SERVO_HOLD_SECONDS", "1.0"))
+        self.servo_handle = lgpio.gpiochip_open(self.chip_number)
+        self.servo_stop_timer = None
 
         self.output_lines = {}
         for actuator, (pin, active_low) in self.outputs.items():
@@ -59,7 +64,44 @@ class HardwareBridge:
             type=gpiod.LINE_REQ_DIR_IN,
         )
 
-    def set_actuator(self, actuator, state):
+    def stop_servo_pulses(self):
+        lgpio.tx_servo(
+            self.servo_handle,
+            self.servo_pin,
+            0,
+            self.servo_frequency,
+        )
+
+    def set_actuator(self, actuator, state, value=100):
+        if actuator == "ventilation":
+            percentage = max(0, min(100, float(value))) if state else 0
+            pulse_width = round(
+                self.servo_closed_pulse
+                + (self.servo_open_pulse - self.servo_closed_pulse)
+                * percentage
+                / 100
+            )
+            if self.servo_stop_timer is not None:
+                self.servo_stop_timer.cancel()
+            lgpio.tx_servo(
+                self.servo_handle,
+                self.servo_pin,
+                pulse_width,
+                self.servo_frequency,
+            )
+            self.servo_stop_timer = threading.Timer(
+                self.servo_hold_seconds, self.stop_servo_pulses
+            )
+            self.servo_stop_timer.daemon = True
+            self.servo_stop_timer.start()
+            return {
+                "actuator": actuator,
+                "state": bool(state),
+                "pin": self.servo_pin,
+                "pulseWidthUs": pulse_width,
+                "frequencyHz": self.servo_frequency,
+                "appliedAt": time.time(),
+            }
         if actuator not in self.outputs:
             raise ValueError(f"Actionneur inconnu: {actuator}")
         pin, active_low = self.outputs[actuator]
@@ -188,6 +230,13 @@ class HardwareBridge:
                 self.set_actuator(actuator, False)
             except Exception:
                 pass
+        if self.servo_stop_timer is not None:
+            self.servo_stop_timer.cancel()
+        try:
+            self.stop_servo_pulses()
+            lgpio.gpiochip_close(self.servo_handle)
+        except Exception:
+            pass
         self.soil_line.release()
         for line in self.output_lines.values():
             line.release()
@@ -207,7 +256,11 @@ try:
         request_id = request.get("id")
         try:
             if request["command"] == "setActuator":
-                data = bridge.set_actuator(request["actuator"], request["state"])
+                data = bridge.set_actuator(
+                    request["actuator"],
+                    request["state"],
+                    request.get("value", 100),
+                )
             elif request["command"] == "readSensors":
                 data = bridge.read_sensors()
             elif request["command"] == "shutdown":

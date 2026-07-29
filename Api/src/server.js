@@ -4,6 +4,7 @@ import { env } from './config/env.js';
 import { startRoutineScheduler, stopRoutineScheduler } from './services/routineScheduler.js';
 import { camera } from './services/camera.js';
 import { hardware } from './services/hardware.js';
+import { startGalleryScheduler, stopGalleryScheduler } from './services/galleryScheduler.js';
 
 let server;
 
@@ -13,10 +14,12 @@ async function start() {
     console.log(`API Hariculture disponible sur http://localhost:${env.port}`);
   });
   startRoutineScheduler();
+  startGalleryScheduler();
 }
 
 async function shutdown() {
   stopRoutineScheduler();
+  stopGalleryScheduler();
   camera.stop();
   hardware.close();
   if (server) await new Promise((resolve) => server.close(resolve));

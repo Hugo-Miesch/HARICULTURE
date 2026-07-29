@@ -19,6 +19,10 @@ export const env = {
   cameraQuality: Number(process.env.CAMERA_QUALITY || 85),
   cameraStartTimeoutMs: Number(process.env.CAMERA_START_TIMEOUT_MS || 10_000),
   cameraIdleStopMs: Number(process.env.CAMERA_IDLE_STOP_MS || 2_000),
+  galleryDirectory:
+    process.env.GALLERY_DIRECTORY ||
+    fileURLToPath(new URL('../../data/gallery', import.meta.url)),
+  galleryThumbnailWidth: Number(process.env.GALLERY_THUMBNAIL_WIDTH || 500),
   hardwareMode: process.env.HARDWARE_MODE || 'mock',
   hardwareBridgePath:
     process.env.HARDWARE_BRIDGE_PATH ||
@@ -32,7 +36,11 @@ export const env = {
   soilWetLevel: Number(process.env.SOIL_WET_LEVEL || 0),
   pumpPin: Number(process.env.PUMP_PIN || 18),
   lightPin: Number(process.env.LIGHT_PIN || 23),
-  ventilationPin: Number(process.env.VENTILATION_PIN || 17),
+  ventilationPin: Number(process.env.VENTILATION_PIN || 12),
+  servoClosedPulseUs: Number(process.env.SERVO_CLOSED_PULSE_US || 500),
+  servoOpenPulseUs: Number(process.env.SERVO_OPEN_PULSE_US || 2500),
+  servoFrequency: Number(process.env.SERVO_FREQUENCY || 50),
+  servoHoldSeconds: Number(process.env.SERVO_HOLD_SECONDS || 1),
   pumpActiveLow: process.env.PUMP_ACTIVE_LOW === 'true',
   lightActiveLow: process.env.LIGHT_ACTIVE_LOW === 'true',
   ventilationActiveLow: process.env.VENTILATION_ACTIVE_LOW === 'true',
