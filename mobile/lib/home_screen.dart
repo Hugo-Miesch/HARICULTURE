@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:forui/forui.dart';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api_client.dart';
@@ -292,6 +294,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 index: page,
                 children: [
                   OverviewPage(
+                    api: widget.api,
                     greenhouse: greenhouse,
                     displayName: displayName,
                     plantEmoji: plantEmoji,
@@ -369,6 +372,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
 class OverviewPage extends StatelessWidget {
   const OverviewPage({
+    required this.api,
     required this.greenhouse,
     required this.displayName,
     required this.plantEmoji,
@@ -383,6 +387,7 @@ class OverviewPage extends StatelessWidget {
     super.key,
   });
 
+  final ApiClient api;
   final Greenhouse greenhouse;
   final String displayName;
   final String plantEmoji;
@@ -555,6 +560,7 @@ class OverviewPage extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         CameraFeedCard(
+          api: api,
           active: cameraActive,
           greenhouseId: greenhouse.id,
           onToggle: onCameraToggle,
@@ -786,28 +792,206 @@ class _GreenhouseIdentitySheetState extends State<_GreenhouseIdentitySheet> {
   }
 }
 
-class CameraFeedCard extends StatelessWidget {
+class CameraFeedCard extends StatefulWidget {
   const CameraFeedCard({
+    required this.api,
     required this.active,
     required this.greenhouseId,
     required this.onToggle,
     super.key,
   });
 
+  final ApiClient api;
   final bool active;
   final String greenhouseId;
   final VoidCallback onToggle;
 
   @override
+  State<CameraFeedCard> createState() => _CameraFeedCardState();
+}
+
+class _CameraFeedCardState extends State<CameraFeedCard> {
+  static const _maximumBufferSize = 5 * 1024 * 1024;
+
+  final List<int> _buffer = [];
+  http.Client? _client;
+  Timer? _firstFrameTimer;
+  Uint8List? _frame;
+  String? _error;
+  bool _connecting = false;
+  int _generation = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.active) unawaited(_startStream());
+  }
+
+  @override
+  void didUpdateWidget(covariant CameraFeedCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final greenhouseChanged = oldWidget.greenhouseId != widget.greenhouseId;
+    if (widget.active && (!oldWidget.active || greenhouseChanged)) {
+      unawaited(_startStream());
+    } else if (!widget.active && oldWidget.active) {
+      _stopStream(reset: true);
+    }
+  }
+
+  @override
+  void dispose() {
+    _stopStream();
+    super.dispose();
+  }
+
+  Future<void> _startStream() async {
+    _stopStream(reset: true);
+    final generation = ++_generation;
+    final client = http.Client();
+    _client = client;
+    if (mounted) {
+      setState(() {
+        _connecting = true;
+        _error = null;
+      });
+    }
+
+    try {
+      final response = await client
+          .send(widget.api.cameraStreamRequest(widget.greenhouseId))
+          .timeout(widget.api.requestTimeout);
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        await response.stream.drain<void>();
+        throw ApiException(
+          response.statusCode == 401
+              ? 'Session expirée. Reconnectez-vous.'
+              : 'Flux refusé par l’API (${response.statusCode}).',
+          statusCode: response.statusCode,
+        );
+      }
+
+      _firstFrameTimer = Timer(widget.api.requestTimeout, () {
+        if (!mounted || generation != _generation || _frame != null) return;
+        setState(() {
+          _connecting = false;
+          _error = 'Aucune image reçue depuis la caméra.';
+        });
+        client.close();
+      });
+
+      await for (final chunk in response.stream) {
+        if (!mounted || generation != _generation || !widget.active) {
+          break;
+        }
+        final frame = _extractLatestFrame(chunk);
+        if (frame == null) continue;
+        _firstFrameTimer?.cancel();
+        setState(() {
+          _frame = frame;
+          _connecting = false;
+          _error = null;
+        });
+      }
+
+      if (mounted &&
+          generation == _generation &&
+          widget.active &&
+          _frame == null &&
+          _error == null) {
+        setState(() {
+          _connecting = false;
+          _error = 'Le flux caméra a été interrompu.';
+        });
+      }
+    } on TimeoutException {
+      _showStreamError(
+        generation,
+        'La caméra ne répond pas après '
+        '${widget.api.requestTimeout.inSeconds} secondes.',
+      );
+    } on ApiException catch (exception) {
+      _showStreamError(generation, exception.message);
+    } on http.ClientException catch (exception) {
+      _showStreamError(
+        generation,
+        'Connexion caméra impossible : ${exception.message}',
+      );
+    } catch (_) {
+      _showStreamError(generation, 'Flux caméra indisponible.');
+    }
+  }
+
+  void _showStreamError(int generation, String message) {
+    if (!mounted || generation != _generation || !widget.active) return;
+    setState(() {
+      _connecting = false;
+      _error = message;
+    });
+  }
+
+  void _stopStream({bool reset = false}) {
+    _generation++;
+    _firstFrameTimer?.cancel();
+    _firstFrameTimer = null;
+    _client?.close();
+    _client = null;
+    _buffer.clear();
+    if (reset) {
+      _frame = null;
+      _error = null;
+      _connecting = false;
+    }
+  }
+
+  Uint8List? _extractLatestFrame(List<int> chunk) {
+    _buffer.addAll(chunk);
+    Uint8List? latestFrame;
+
+    while (true) {
+      final start = _jpegMarkerIndex(0xff, 0xd8);
+      if (start < 0) {
+        if (_buffer.length > 1) {
+          final lastByte = _buffer.last;
+          _buffer
+            ..clear()
+            ..addAll(lastByte == 0xff ? [lastByte] : const []);
+        }
+        break;
+      }
+
+      final end = _jpegMarkerIndex(0xff, 0xd9, start + 2);
+      if (end < 0) {
+        if (start > 0) _buffer.removeRange(0, start);
+        if (_buffer.length > _maximumBufferSize) _buffer.clear();
+        break;
+      }
+
+      latestFrame = Uint8List.fromList(_buffer.sublist(start, end + 2));
+      _buffer.removeRange(0, end + 2);
+    }
+
+    return latestFrame;
+  }
+
+  int _jpegMarkerIndex(int first, int second, [int start = 0]) {
+    for (var index = start; index < _buffer.length - 1; index++) {
+      if (_buffer[index] == first && _buffer[index + 1] == second) {
+        return index;
+      }
+    }
+    return -1;
+  }
+
+  @override
   Widget build(BuildContext context) => GestureDetector(
-        onTap: onToggle,
+        onTap: widget.onToggle,
         child: ClipRRect(
           borderRadius: BorderRadius.circular(24),
           child: SizedBox(
             height: 210,
             child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 320),
-              child: active ? _liveView() : _standbyView(context),
+              child: widget.active ? _activeView() : _standbyView(context),
             ),
           ),
         ),
@@ -887,15 +1071,75 @@ class CameraFeedCard extends StatelessWidget {
     );
   }
 
-  Widget _liveView() {
-    final image = greenhouseId == 'tropical-greenhouse'
-        ? 'assets/images/greenhouse-tropical.png'
-        : 'assets/images/greenhouse-tomatoes.png';
+  Widget _activeView() {
+    if (_error != null) return _errorView();
+    if (_frame == null || _connecting) return _connectingView();
+    return _liveView(_frame!);
+  }
+
+  Widget _connectingView() => Container(
+        key: const ValueKey('camera-connecting'),
+        color: const Color(0xff090d0e),
+        alignment: Alignment.center,
+        child: const Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(color: Color(0xff69e1c1)),
+            SizedBox(height: 14),
+            Text(
+              'Connexion à la caméra…',
+              style: TextStyle(
+                color: Color(0xffedf1f0),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      );
+
+  Widget _errorView() => Container(
+        key: const ValueKey('camera-error'),
+        color: const Color(0xff090d0e),
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        alignment: Alignment.center,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              FLucideIcons.videoOff,
+              color: Color(0xffff8a7a),
+              size: 32,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              _error!,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Color(0xffedf1f0),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 7),
+            const Text(
+              'Touchez pour fermer, puis rouvrez le direct.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Color(0xff9aa5a2), fontSize: 11),
+            ),
+          ],
+        ),
+      );
+
+  Widget _liveView(Uint8List frame) {
     return Stack(
       key: const ValueKey('live'),
       fit: StackFit.expand,
       children: [
-        Image.asset(image, fit: BoxFit.cover),
+        Image.memory(
+          frame,
+          fit: BoxFit.cover,
+          gaplessPlayback: true,
+          filterQuality: FilterQuality.low,
+        ),
         const DecoratedBox(
           decoration: BoxDecoration(
             gradient: LinearGradient(
@@ -932,7 +1176,7 @@ class CameraFeedCard extends StatelessWidget {
               const SizedBox(width: 8),
               const Expanded(
                 child: Text(
-                  'Connexion locale · qualité auto',
+                  'Flux Raspberry · qualité auto',
                   style: TextStyle(
                     color: Color(0xffd3dad9),
                     fontSize: 12,

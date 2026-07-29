@@ -130,12 +130,14 @@ class _GreenhouseListScreenState extends State<GreenhouseListScreen> {
   @override
   Widget build(BuildContext context) {
     final colors = context.appColors;
+    final accountSection = _challengesEnabled ? 3 : 2;
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: colors.background,
       drawer: _AppDrawer(
         section: section,
-        accountSection: _challengesEnabled ? 2 : 1,
+        gallerySection: 1,
+        accountSection: accountSection,
         onSelect: (value) {
           Navigator.of(context).pop();
           setState(() => section = value);
@@ -145,6 +147,10 @@ class _GreenhouseListScreenState extends State<GreenhouseListScreen> {
         index: section,
         children: [
           _greenhousesPage(
+            onOpenMenu: () => _scaffoldKey.currentState?.openDrawer(),
+          ),
+          _GalleryPage(
+            api: widget.api,
             onOpenMenu: () => _scaffoldKey.currentState?.openDrawer(),
           ),
           if (_challengesEnabled) const _ChallengesPage(),
@@ -583,12 +589,6 @@ class _PairGreenhouseSheetState extends State<_PairGreenhouseSheet> {
                       ),
               ),
             ),
-            const SizedBox(height: 10),
-            Text(
-              'Code de démonstration : 0000',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: colors.muted, fontSize: 12),
-            ),
           ],
         ),
       ),
@@ -599,11 +599,13 @@ class _PairGreenhouseSheetState extends State<_PairGreenhouseSheet> {
 class _AppDrawer extends StatelessWidget {
   const _AppDrawer({
     required this.section,
+    required this.gallerySection,
     required this.accountSection,
     required this.onSelect,
   });
 
   final int section;
+  final int gallerySection;
   final int accountSection;
   final ValueChanged<int> onSelect;
 
@@ -669,6 +671,13 @@ class _AppDrawer extends StatelessWidget {
                 label: 'Mes serres',
                 selected: section == 0,
                 onTap: () => onSelect(0),
+              ),
+              const SizedBox(height: 8),
+              _DrawerItem(
+                icon: Icons.photo_library_outlined,
+                label: 'Galerie',
+                selected: section == gallerySection,
+                onTap: () => onSelect(gallerySection),
               ),
               const SizedBox(height: 8),
               _DrawerItem(
@@ -750,6 +759,428 @@ class _DrawerItem extends StatelessWidget {
       ),
     );
   }
+}
+
+class _GalleryPage extends StatefulWidget {
+  const _GalleryPage({
+    required this.api,
+    required this.onOpenMenu,
+  });
+
+  final ApiClient api;
+  final VoidCallback onOpenMenu;
+
+  @override
+  State<_GalleryPage> createState() => _GalleryPageState();
+}
+
+class _GalleryPageState extends State<_GalleryPage> {
+  List<GalleryPhoto> photos = [];
+  bool loading = true;
+  String? error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    if (mounted) {
+      setState(() {
+        loading = true;
+        error = null;
+      });
+    }
+    try {
+      final values = await widget.api.gallery();
+      if (!mounted) return;
+      setState(() {
+        photos = values;
+        loading = false;
+      });
+    } catch (exception) {
+      if (!mounted) return;
+      final routeMissing =
+          exception is ApiException && exception.statusCode == 404;
+      setState(() {
+        loading = false;
+        error = routeMissing
+            ? 'La galerie attend encore la route GET /api/gallery.'
+            : exception.toString();
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+    return SafeArea(
+      bottom: false,
+      child: RefreshIndicator(
+        onRefresh: _load,
+        color: colors.accent,
+        backgroundColor: colors.surface,
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(
+            parent: BouncingScrollPhysics(),
+          ),
+          slivers: [
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(22, 30, 22, 22),
+              sliver: SliverToBoxAdapter(
+                child: Row(
+                  children: [
+                    _MenuButton(onTap: widget.onOpenMenu),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Galerie',
+                            style: TextStyle(
+                              color: colors.foreground,
+                              fontSize: 36,
+                              height: 1,
+                              letterSpacing: -1.4,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 7),
+                          Text(
+                            'Les photos capturées par vos serres',
+                            style: TextStyle(
+                              color: colors.muted,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (loading)
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: Center(
+                  child: CircularProgressIndicator(color: colors.accent),
+                ),
+              )
+            else if (error != null)
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: _GalleryMessage(
+                  icon: FLucideIcons.imageOff,
+                  title: 'Galerie indisponible',
+                  message: error!,
+                  actionLabel: 'Réessayer',
+                  onAction: _load,
+                ),
+              )
+            else if (photos.isEmpty)
+              const SliverFillRemaining(
+                hasScrollBody: false,
+                child: _GalleryMessage(
+                  icon: Icons.photo_library_outlined,
+                  title: 'Aucune photo',
+                  message:
+                      'Les prochaines captures de la serre apparaîtront ici.',
+                ),
+              )
+            else
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(22, 4, 22, 42),
+                sliver: SliverGrid.builder(
+                  itemCount: photos.length,
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    mainAxisSpacing: 14,
+                    crossAxisSpacing: 14,
+                    childAspectRatio: 0.76,
+                  ),
+                  itemBuilder: (context, index) => _GalleryPhotoCard(
+                    api: widget.api,
+                    photo: photos[index],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _GalleryMessage extends StatelessWidget {
+  const _GalleryMessage({
+    required this.icon,
+    required this.title,
+    required this.message,
+    this.actionLabel,
+    this.onAction,
+  });
+
+  final IconData icon;
+  final String title;
+  final String message;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(30, 20, 30, 100),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: colors.accent.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: Icon(icon, color: colors.accent, size: 32),
+            ),
+            const SizedBox(height: 18),
+            Text(
+              title,
+              style: TextStyle(
+                color: colors.foreground,
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: colors.muted,
+                fontSize: 14,
+                height: 1.4,
+              ),
+            ),
+            if (onAction != null && actionLabel != null) ...[
+              const SizedBox(height: 20),
+              FilledButton.icon(
+                style: appPrimaryButtonStyle(context, height: 48),
+                onPressed: onAction,
+                icon: const Icon(FLucideIcons.refreshCw, size: 18),
+                label: Text(actionLabel!),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _GalleryPhotoCard extends StatelessWidget {
+  const _GalleryPhotoCard({
+    required this.api,
+    required this.photo,
+  });
+
+  final ApiClient api;
+  final GalleryPhoto photo;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+    return GestureDetector(
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => _GalleryPhotoViewer(api: api, photo: photo),
+        ),
+      ),
+      child: Container(
+        decoration: BoxDecoration(
+          color: colors.surface,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: colors.border),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Hero(
+                tag: 'gallery-photo-${photo.id}',
+                child: _GalleryNetworkImage(
+                  api: api,
+                  url: photo.thumbnailUrl,
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 11, 12, 13),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    photo.greenhouseName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: colors.foreground,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _galleryDate(photo.capturedAt),
+                    style: TextStyle(color: colors.muted, fontSize: 11),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _GalleryNetworkImage extends StatelessWidget {
+  const _GalleryNetworkImage({
+    required this.api,
+    required this.url,
+    this.fit = BoxFit.cover,
+  });
+
+  final ApiClient api;
+  final String url;
+  final BoxFit fit;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+    if (url.trim().isEmpty) {
+      return ColoredBox(
+        color: colors.surfaceSoft,
+        child: Center(
+          child: Icon(
+            FLucideIcons.imageOff,
+            color: colors.muted,
+            size: 30,
+          ),
+        ),
+      );
+    }
+    return Image.network(
+      api.resolveMediaUrl(url).toString(),
+      headers: api.mediaHeaders,
+      fit: fit,
+      width: double.infinity,
+      height: double.infinity,
+      loadingBuilder: (context, child, progress) => progress == null
+          ? child
+          : ColoredBox(
+              color: colors.surfaceSoft,
+              child: Center(
+                child: CircularProgressIndicator(
+                  color: colors.accent,
+                  strokeWidth: 2,
+                ),
+              ),
+            ),
+      errorBuilder: (_, __, ___) => ColoredBox(
+        color: colors.surfaceSoft,
+        child: Center(
+          child: Icon(
+            FLucideIcons.imageOff,
+            color: colors.muted,
+            size: 30,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _GalleryPhotoViewer extends StatelessWidget {
+  const _GalleryPhotoViewer({
+    required this.api,
+    required this.photo,
+  });
+
+  final ApiClient api;
+  final GalleryPhoto photo;
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        backgroundColor: const Color(0xff080b0a),
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          foregroundColor: Colors.white,
+          title: Text(photo.greenhouseName),
+        ),
+        body: Column(
+          children: [
+            Expanded(
+              child: InteractiveViewer(
+                minScale: 0.8,
+                maxScale: 5,
+                child: Center(
+                  child: Hero(
+                    tag: 'gallery-photo-${photo.id}',
+                    child: _GalleryNetworkImage(
+                      api: api,
+                      url: photo.imageUrl,
+                      fit: BoxFit.contain,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(22, 14, 22, 18),
+                child: Row(
+                  children: [
+                    const Icon(
+                      FLucideIcons.camera,
+                      color: Color(0xff69e1c1),
+                      size: 18,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        photo.caption?.trim().isNotEmpty == true
+                            ? photo.caption!
+                            : _galleryDate(photo.capturedAt),
+                        style: const TextStyle(
+                          color: Color(0xffd3dad9),
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+}
+
+String _galleryDate(DateTime? value) {
+  if (value == null) return 'Date inconnue';
+  final local = value.toLocal();
+  return '${local.day.toString().padLeft(2, '0')}/'
+      '${local.month.toString().padLeft(2, '0')}/'
+      '${local.year} · '
+      '${local.hour.toString().padLeft(2, '0')}:'
+      '${local.minute.toString().padLeft(2, '0')}';
 }
 
 class _ChallengesPage extends StatelessWidget {

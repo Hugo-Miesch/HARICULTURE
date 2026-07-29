@@ -99,6 +99,55 @@ class SensorReading {
       );
 }
 
+class GalleryPhoto {
+  const GalleryPhoto({
+    required this.id,
+    required this.greenhouseId,
+    required this.greenhouseName,
+    required this.imageUrl,
+    required this.thumbnailUrl,
+    required this.capturedAt,
+    this.caption,
+    this.width,
+    this.height,
+  });
+
+  final String id;
+  final String greenhouseId;
+  final String greenhouseName;
+  final String imageUrl;
+  final String thumbnailUrl;
+  final DateTime? capturedAt;
+  final String? caption;
+  final int? width;
+  final int? height;
+
+  factory GalleryPhoto.fromJson(Map<String, dynamic> json) {
+    final greenhouse =
+        (json['greenhouse'] as Map?)?.cast<String, dynamic>() ?? {};
+    final imageUrl =
+        (json['imageUrl'] ?? json['url'] ?? json['path'] ?? '').toString();
+    return GalleryPhoto(
+      id: (json['_id'] ?? json['id']).toString(),
+      greenhouseId:
+          (json['greenhouseId'] ?? greenhouse['_id'] ?? greenhouse['id'] ?? '')
+              .toString(),
+      greenhouseName:
+          (json['greenhouseName'] ?? greenhouse['name'] ?? 'Ma serre')
+              .toString(),
+      imageUrl: imageUrl,
+      thumbnailUrl:
+          (json['thumbnailUrl'] ?? json['thumbnail'] ?? imageUrl).toString(),
+      capturedAt: DateTime.tryParse(
+        (json['capturedAt'] ?? json['createdAt'] ?? '').toString(),
+      ),
+      caption: json['caption']?.toString(),
+      width: (json['width'] as num?)?.toInt(),
+      height: (json['height'] as num?)?.toInt(),
+    );
+  }
+}
+
 class Routine {
   const Routine({
     required this.id,

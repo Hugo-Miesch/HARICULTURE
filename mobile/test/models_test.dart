@@ -3,8 +3,8 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hariculture/api_client.dart';
-import 'package:hariculture/mock_api_client.dart';
 import 'package:hariculture/models.dart';
+import 'package:hariculture/serial_number_input.dart';
 
 void main() {
   test('convertit une serre et ses actionneurs depuis l API', () {
@@ -87,41 +87,40 @@ void main() {
     await server.close(force: true);
   });
 
-  test('la démo fonctionne sans API', () async {
-    final api = MockApiClient();
-    final greenhouses = await api.getGreenhouses();
-    final greenhouse = greenhouses.first;
-
-    expect(greenhouses, hasLength(2));
-    expect(greenhouse.online, isTrue);
-    expect(await api.collectReading(greenhouse.id), isNotNull);
-    expect(await api.latestReading(greenhouse.id), isNotNull);
-    expect(await api.routines(greenhouse.id), hasLength(3));
-
-    final irrigation = await api.setActuator(
-      greenhouse.id,
-      'irrigation',
-      true,
-    );
-    expect(irrigation.state, isTrue);
+  test('normalise un SN de 4 caractères', () {
+    expect(normalizeSerialNumber(' ab12 '), 'AB12');
   });
 
-  test('le SN accepte 4 caractères mais seul 0000 existe en démo', () async {
-    final api = MockApiClient();
+  test('construit le flux caméra authentifié depuis la racine API', () {
+    final api = ApiClient(baseUrl: 'http://10.123.226.164:3000/');
+    api.token = 'jwt-test';
 
-    await expectLater(
-      api.pairGreenhouse('ab12'),
-      throwsA(
-        isA<ApiException>().having(
-          (exception) => exception.message,
-          'message',
-          'Création impossible : SN inexistant.',
-        ),
-      ),
+    final request = api.cameraStreamRequest('serre-1');
+
+    expect(
+      request.url.toString(),
+      'http://10.123.226.164:3000/api/greenhouses/serre-1/camera/stream',
     );
+    expect(request.headers['Authorization'], 'Bearer jwt-test');
+  });
 
-    final greenhouse = await api.pairGreenhouse('0000');
-    expect(greenhouse.id, 'paired-greenhouse-0000');
-    expect(greenhouse.name, 'Serre 0000');
+  test('convertit une photo de galerie et résout son URL protégée', () {
+    final photo = GalleryPhoto.fromJson({
+      'id': 'photo-1',
+      'greenhouseId': 'serre-1',
+      'greenhouseName': 'Serre de test',
+      'imageUrl': '/api/gallery/photo-1/file',
+      'capturedAt': '2026-07-29T15:30:00.000Z',
+    });
+    final api = ApiClient(baseUrl: 'http://10.123.226.164:3000/');
+    api.token = 'jwt-test';
+
+    expect(photo.greenhouseName, 'Serre de test');
+    expect(photo.thumbnailUrl, photo.imageUrl);
+    expect(
+      api.resolveMediaUrl(photo.imageUrl).toString(),
+      'http://10.123.226.164:3000/api/gallery/photo-1/file',
+    );
+    expect(api.mediaHeaders['Authorization'], 'Bearer jwt-test');
   });
 }

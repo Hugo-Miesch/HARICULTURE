@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
@@ -16,15 +17,34 @@ class ApiException implements Exception {
 }
 
 class ApiClient {
-  ApiClient({required this.baseUrl});
+  ApiClient({
+    required String baseUrl,
+    this.requestTimeout = const Duration(seconds: 10),
+  }) : baseUrl = _normalizeBaseUrl(baseUrl);
 
   final String baseUrl;
+  final Duration requestTimeout;
   String? token;
+
+  static String _normalizeBaseUrl(String value) {
+    final normalized = value.trim().replaceFirst(RegExp(r'/+$'), '');
+    return normalized.endsWith('/api') ? normalized : '$normalized/api';
+  }
 
   Map<String, String> get _headers => {
         'Content-Type': 'application/json',
         if (token != null) 'Authorization': 'Bearer $token',
       };
+
+  Map<String, String> get mediaHeaders => {
+        if (token != null) 'Authorization': 'Bearer $token',
+      };
+
+  Uri resolveMediaUrl(String value) {
+    final uri = Uri.parse(value);
+    if (uri.hasScheme) return uri;
+    return Uri.parse('$baseUrl/').resolve(value);
+  }
 
   Future<Map<String, dynamic>> _request(
     String method,
@@ -35,18 +55,32 @@ class ApiClient {
     late http.Response response;
     final encoded = body == null ? null : jsonEncode(body);
 
-    switch (method) {
-      case 'POST':
-        response = await http.post(uri, headers: _headers, body: encoded);
-        break;
-      case 'PATCH':
-        response = await http.patch(uri, headers: _headers, body: encoded);
-        break;
-      case 'DELETE':
-        response = await http.delete(uri, headers: _headers);
-        break;
-      default:
-        response = await http.get(uri, headers: _headers);
+    try {
+      switch (method) {
+        case 'POST':
+          response = await http
+              .post(uri, headers: _headers, body: encoded)
+              .timeout(requestTimeout);
+          break;
+        case 'PATCH':
+          response = await http
+              .patch(uri, headers: _headers, body: encoded)
+              .timeout(requestTimeout);
+          break;
+        case 'DELETE':
+          response =
+              await http.delete(uri, headers: _headers).timeout(requestTimeout);
+          break;
+        default:
+          response =
+              await http.get(uri, headers: _headers).timeout(requestTimeout);
+      }
+    } on TimeoutException {
+      throw ApiException(
+        'API injoignable après ${requestTimeout.inSeconds} secondes.',
+      );
+    } on http.ClientException catch (exception) {
+      throw ApiException('Connexion à l’API impossible : ${exception.message}');
     }
 
     if (response.statusCode == 204) return {};
@@ -96,6 +130,21 @@ class ApiClient {
         .map((e) => Greenhouse.fromJson(e as Map<String, dynamic>))
         .toList();
   }
+
+  Future<List<GalleryPhoto>> gallery({int limit = 100}) async {
+    final data = await _request('GET', '/gallery?limit=$limit');
+    return (data['photos'] as List? ?? const [])
+        .map(
+          (photo) =>
+              GalleryPhoto.fromJson((photo as Map).cast<String, dynamic>()),
+        )
+        .toList();
+  }
+
+  http.Request cameraStreamRequest(String greenhouseId) => http.Request(
+        'GET',
+        Uri.parse('$baseUrl/greenhouses/$greenhouseId/camera/stream'),
+      )..headers.addAll(_headers);
 
   Future<Greenhouse> getGreenhouse(String greenhouseId) async {
     final data = await _request('GET', '/greenhouses/$greenhouseId');

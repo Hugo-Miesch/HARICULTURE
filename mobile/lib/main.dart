@@ -5,15 +5,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'api_client.dart';
 import 'app_theme.dart';
 import 'greenhouse_list_screen.dart';
-import 'mock_api_client.dart';
 import 'models.dart';
 import 'serial_number_input.dart';
 
 const apiUrl = String.fromEnvironment(
   'API_URL',
-  defaultValue: 'http://10.0.2.2:3000/api',
+  defaultValue: 'http://10.123.226.164:3000/',
 );
-const useMockData = bool.fromEnvironment('USE_MOCK_DATA', defaultValue: true);
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -28,8 +26,7 @@ class HaricultureApp extends StatefulWidget {
 }
 
 class _HaricultureAppState extends State<HaricultureApp> {
-  final ApiClient api =
-      useMockData ? MockApiClient() : ApiClient(baseUrl: apiUrl);
+  final ApiClient api = ApiClient(baseUrl: apiUrl);
   bool loading = true;
   bool authenticated = false;
   bool darkMode = true;
@@ -162,12 +159,8 @@ class AuthScreen extends StatefulWidget {
 
 class _AuthScreenState extends State<AuthScreen> {
   late final name = TextEditingController(text: 'Camille Jardin');
-  late final email = TextEditingController(
-    text: widget.api is MockApiClient ? 'demo@hariculture.fr' : '',
-  );
-  late final password = TextEditingController(
-    text: widget.api is MockApiClient ? 'demo1234' : '',
-  );
+  late final email = TextEditingController();
+  late final password = TextEditingController();
   bool register = false;
   bool loading = false;
   String? error;
@@ -229,9 +222,7 @@ class _AuthScreenState extends State<AuthScreen> {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    widget.api is MockApiClient
-                        ? 'Une démo complète, prête à explorer sans matériel.'
-                        : 'Votre serre, ses mesures et ses routines dans votre poche.',
+                    'Votre serre, ses mesures et ses routines dans votre poche.',
                     style: Theme.of(context).textTheme.bodyLarge,
                   ),
                   const SizedBox(height: 34),
@@ -288,15 +279,6 @@ class _AuthScreenState extends State<AuthScreen> {
                           )
                         : Text(register ? 'Créer mon compte' : 'Se connecter'),
                   ),
-                  if (widget.api is MockApiClient)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: Text(
-                        'Mode démo local · aucune donnée n’est envoyée',
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ),
                   const SizedBox(height: 10),
                   TextButton(
                     style: appTonalButtonStyle(context),

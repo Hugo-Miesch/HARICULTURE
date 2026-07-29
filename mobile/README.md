@@ -1,7 +1,7 @@
 # Hariculture mobile
 
-Application Flutter de la serre connectée Hariculture. Elle démarre par défaut avec
-des données de démonstration locales : aucune API n'est nécessaire.
+Application Flutter de la serre connectée Hariculture. Elle utilise directement
+l'API réelle configurée dans `lib/main.dart` ou avec `API_URL`.
 
 ## Démarrage
 
@@ -12,24 +12,20 @@ des données de démonstration locales : aucune API n'est nécessaire.
    flutter pub get
    ```
 
-3. Lancer la démo Android :
+3. Lancer l'application Android :
 
    ```bash
    flutter run
    ```
 
-Le compte de démonstration est prérempli. Les commandes, mesures et routines sont
-simulées dans l'application.
-
-Pour reconnecter l'API plus tard :
+Pour utiliser une autre adresse d'API :
 
 ```bash
 flutter run \
-  --dart-define=USE_MOCK_DATA=false \
-  --dart-define=API_URL=http://10.0.2.2:3000/api
+  --dart-define=API_URL=http://adresse-api:3000
 ```
 
-`10.0.2.2` cible la machine hôte depuis l'émulateur Android.
+Le client ajoute automatiquement le préfixe `/api` à l'adresse si nécessaire.
 
 Les projets Android/iOS autorisent l'API HTTP locale pour le développement. En
 production, utiliser HTTPS et retirer les exceptions de transport non sécurisé.
